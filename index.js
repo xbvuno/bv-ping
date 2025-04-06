@@ -63,7 +63,7 @@ function generateBar(ping_value, time) {
     const bg_color = bgColorFromValue(ping_value, THRESHOLDS, COLORS);
 
     const bar_width = Math.min(THRESHOLDS.at(-1), Math.floor(ping_value / THRESHOLDS.at(-1) * max_bar_width));
-    const space_left = max_bar_width - bar_width - 1;
+    const space_left = Math.max(max_bar_width - bar_width - 1, 0);
 
     let line = 'x'.repeat(bar_width) + ' '.repeat(space_left);
 
