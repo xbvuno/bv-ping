@@ -1,6 +1,6 @@
 {
   "name": "bv-ping",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI tool to visualize ping latency with colorful bars",
   "main": "index.js",
   "bin": {
