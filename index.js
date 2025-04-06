@@ -1,87 +1,74 @@
+const { Command } = require('commander');
 const ping = require("ping");
 const { styleText } = require("node:util");
 
+// Command-line argument parsing
+const program = new Command();
+program
+    .argument('[url]', 'URL to ping', '8.8.8.8') // Default URL is 8.8.8.8
+    .option('--every <seconds>', 'Interval between pings in seconds', 1) // Default interval is 1 second
+    .option('--timestamp', 'Add a timestamp on the right', false)
+    .option('--thresholds <numbers>', 'Array of 3 increasing numbers', (value) => {
+        const numbers = value.replace(/[\[\]\s]/g, '').split(',').map(Number);
+        if (numbers.length !== 3 || !numbers.every((n, i, arr) => i === 0 || n > arr[i - 1])) {
+            throw new Error('--thresholds must be an array of 3 numbers, each larger than the previous.');
+        }
+        return numbers;
+    }, [128, 256, 500]); // Default thresholds
+program.parse(process.argv);
 
-const PING_URL = '8.8.8.8'
-const EVERY_MS = 1000;
+const options = program.opts();
+const PING_URL = program.args[0];
+const EVERY_MS = parseInt(parseFloat(options.every) * 1000);
+const ADD_TIMESTAMP = options.timestamp;
+const THRESHOLDS = options.thresholds;
 
-const THRESHOLDS = [128, 256, 500];
 const COLORS = ['green', 'yellow', 'red'];
-const MAX_PING = THRESHOLDS.at(-1);
 const EXIT_CHARS = ["q", "\u0003"];
 
 let pings = [];
 let times = [];
-let thresholds_on_width = [];
-let bottom_title = ''
+let max_bar_width = 0;
+let bottom_title = '';
 
-function getTimeStamp() {
+// Utility functions
+function timeStamp() {
     const now = new Date();
-    
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    
-    return `${hours}:${minutes}:${seconds}`;
+    return now.toTimeString().split(' ')[0]; // Format: HH:MM:SS
 }
 
-
-function onResize() {
-    const width = process.stdout.columns;
-    thresholds_on_width = [];  // Reset on resize
-    for (const threshold of THRESHOLDS) {
-        thresholds_on_width.push(Math.floor(threshold / MAX_PING * (width - 4)));
-    }
-    console.clear()
-    for (const [i, ping_value] of pings.entries()) {
-        if (i !== pings.length - 1)
-            console.log(generateBar(ping_value, times[i]))
-    }
-    printConsole()
-
-    const every_s = EVERY_MS / 1000
-    let text = `pinging ${PING_URL} every ${every_s}s`
-    if (text.length >= width) {
-        text = text.slice(0, width - 3) + '...'
-    } else {
-        const gap = Math.floor((width - text.length) / 2)
-        text = ' '.repeat(gap) + text + ' '.repeat(gap)
-    }
-    bottom_title = styleText(['bgWhite','black'], text +  ' '.repeat(width - text.length)) + '\r'
+function formatBottomText(text, width) {
+    if (text.length >= width) return text.slice(0, width - 3) + '...';
+    const gap = Math.floor((width - text.length) / 2);
+    return ' '.repeat(gap) + text + ' '.repeat(width - text.length - gap);
 }
 
-function bgColorFromValue(value) {
-    let bgcolor = COLORS[0];
-    for (const [i, threshold] of THRESHOLDS.entries()) {
-        if (value < threshold) {
-            bgcolor = COLORS[i];
-            break;
-        }
+function bgColorFromValue(value, thresholds, colors) {
+    for (let i = 0; i < thresholds.length; i++) {
+        if (value < thresholds[i]) return `bg${colors[i][0].toUpperCase()}${colors[i].slice(1)}`;
     }
-    return 'bg' + bgcolor[0].toUpperCase() + bgcolor.slice(1);
+    return `bg${colors[colors.length - 1][0].toUpperCase()}${colors[colors.length - 1].slice(1)}`;
 }
 
 function generateBar(ping_value, time) {
-    const width = process.stdout.columns - 16
-
     if (ping_value === -1)
-        return time + '| T OUT ' + '/'.repeat(width);
+        return time + '| T OUT ' + '/'.repeat(max_bar_width);
     if (ping_value === -2)
-        return time + '|  ERR  ' + '/'.repeat(width);
-    
-    const bg_color = bgColorFromValue(ping_value);
+        return time + '|  ERR  ' + '/'.repeat(max_bar_width);
 
-    const bar_width = Math.min(MAX_PING, Math.floor(ping_value / MAX_PING * (width)));
-    const space_left = width - bar_width - 1;
+    const bg_color = bgColorFromValue(ping_value, THRESHOLDS, COLORS);
+
+    const bar_width = Math.min(THRESHOLDS.at(-1), Math.floor(ping_value / THRESHOLDS.at(-1) * max_bar_width));
+    const space_left = max_bar_width - bar_width - 1;
 
     let line = 'x'.repeat(bar_width) + ' '.repeat(space_left);
 
     let sep_count = 0;
-    // Place thresholds markers
-    for (const [i, threshold] of thresholds_on_width.entries()) {
+    const thresholds_on_width = THRESHOLDS.map(threshold => Math.floor(threshold / THRESHOLDS.at(-1) * max_bar_width));
+    for (const threshold of thresholds_on_width) {
         if (threshold < bar_width) {
-            sep_count += 1
-            continue
+            sep_count += 1;
+            continue;
         }
         line = line.slice(0, threshold) + '|' + line.slice(threshold + 1);
     }
@@ -96,41 +83,34 @@ function generateBar(ping_value, time) {
         sep_count += 1;
     }
 
-    return time + '| ' + String(ping_value).padStart(3, ' ') + 'ms ' + line;
+    const timestamp = ADD_TIMESTAMP ? `[${timeStamp()}] ` : '';
+    return timestamp + String(ping_value).padStart(3, ' ') + 'ms ' + line;
 }
 
 function printConsole() {
-    const width = process.stdout.columns;
     if (pings.length) {
-        const last_ping = pings.at(-1)
-        const last_time = times.at(-1)
-        console.log(generateBar(last_ping, last_time));
+        console.log(generateBar(pings.at(-1), times.at(-1)));
     }
-
     process.stdout.write(bottom_title);
 }
 
-async function doPing() {
-    try {
-        const res = await ping.promise.probe(PING_URL);
-        if (res.alive) {
-            pings.push(res.time);
-        } else {
-            pings.push(-1);
-        }
-    } catch (err) {
-        pings.push(-2);
-    }
-    times.push(getTimeStamp())
-    while (pings.length > Math.floor(process.stdout.rows * 1.5)) {
-        pings.shift()
-        times.shift()
-    }
+function onResize() {
+    const width = process.stdout.columns;
+    max_bar_width = width - 6 - (ADD_TIMESTAMP ? 11 : 0);
+
+    console.clear();
+    pings.slice(0, pings.length - 1).forEach((pingValue, i) => {
+        console.log(generateBar(pingValue, times[i]));
+    });
+
+    const text = `doing a ping on ${PING_URL} every ${EVERY_MS / 1000}s`;
+    bottom_title = formatBottomText(text, width) + '\r';
     printConsole();
 }
 
+// Main logic
 if (!process.stdout.isTTY || !process.stdin.isTTY) {
-    console.log("Terminale non supportato");
+    console.error("This terminal is not supported");
     process.exit(1);
 }
 
@@ -140,16 +120,30 @@ process.stdin.setEncoding("utf8");
 
 process.stdout.on("resize", onResize);
 
-onResize(); // Initialize on resize
+onResize();
 
-// printConsole(); // Initial print
-doPing(); // First ping
+async function doPing() {
+    try {
+        const res = await ping.promise.probe(PING_URL);
+        pings.push(res.alive ? res.time : -1);
+    } catch {
+        pings.push(-2);
+    }
+    times.push(timeStamp());
+    while (pings.length > process.stdout.rows * 2) {
+        pings.shift();
+        times.shift();
+    }
+    printConsole();
+}
 
+doPing();
 const pingInterval = setInterval(doPing, EVERY_MS);
 
 process.stdin.on("data", (key) => {
     if (EXIT_CHARS.includes(key)) {
         clearInterval(pingInterval);
+        console.log();
         process.exit();
     }
 });
