@@ -11,7 +11,7 @@ program
     .option('--every <seconds>', 'Interval between pings in seconds', 1) // Default interval is 1 second
     .option('--timestamp', 'Add a timestamp on the right', false)
     .option('--thresholds <numbers>', 'Array of 3 increasing numbers', (value) => {
-        const numbers = value.replace(/[\[\]\s]/g, '').split(',').map(Number);
+        const numbers = value.replace('[', '').replace(']', '').split(' ').map(Number);
         if (numbers.length !== 3 || !numbers.every((n, i, arr) => i === 0 || n > arr[i - 1])) {
             throw new Error('--thresholds must be an array of 3 numbers, each larger than the previous.');
         }
@@ -53,10 +53,12 @@ function bgColorFromValue(value, thresholds, colors) {
 }
 
 function generateBar(ping_value, time) {
+    const timestamp = ADD_TIMESTAMP ? `[${time}] ` : '';
+
     if (ping_value === -1)
-        return time + '| T OUT ' + '/'.repeat(max_bar_width);
+        return timestamp + ' TOUT ' + '/'.repeat(max_bar_width);
     if (ping_value === -2)
-        return time + '|  ERR  ' + '/'.repeat(max_bar_width);
+        return timestamp + ' ERR  ' + '/'.repeat(max_bar_width);
 
     const bg_color = bgColorFromValue(ping_value, THRESHOLDS, COLORS);
 
@@ -85,7 +87,6 @@ function generateBar(ping_value, time) {
         sep_count += 1;
     }
 
-    const timestamp = ADD_TIMESTAMP ? `[${timeStamp()}] ` : '';
     return timestamp + String(ping_value).padStart(3, ' ') + 'ms ' + line;
 }
 
