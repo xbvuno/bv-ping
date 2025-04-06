@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const { Command } = require('commander');
 const ping = require("ping");
 const { styleText } = require("node:util");
@@ -18,7 +20,7 @@ program
 program.parse(process.argv);
 
 const options = program.opts();
-const PING_URL = program.args[0];
+const PING_URL = program.args[0] || '8.8.8.8';
 const EVERY_MS = parseInt(parseFloat(options.every) * 1000);
 const ADD_TIMESTAMP = options.timestamp;
 const THRESHOLDS = options.thresholds;
