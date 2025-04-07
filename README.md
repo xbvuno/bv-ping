@@ -8,8 +8,15 @@ A terminal-based Node.js utility to visualize ping latency using colored bars, d
 - Configurable intervals and latency thresholds
 - Graphical bar output with color coding
 - Live updates on terminal resize
-- Clean UI with optional timestamp display
+- Minimal UI with optional timestamp display
 
+## Installation
+
+To install `bv-ping` globally on your system, use the following command:
+
+```bash
+npm install -g bv-ping
+```
 > Make sure you have Node.js v18+ (for native `styleText` support).
 
 ## Usage
