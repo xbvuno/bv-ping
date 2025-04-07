@@ -53,7 +53,7 @@ function bgColorFromValue(value, thresholds, colors) {
 }
 
 function generateBar(ping_value, time) {
-    const timestamp = ADD_TIMESTAMP ? `[${time}] ` : '';
+    let timestamp = ADD_TIMESTAMP ? `[${time}] ` : '';
 
     if (ping_value === -1)
         return timestamp + ' TOUT ' + '/'.repeat(max_bar_width);
@@ -87,13 +87,17 @@ function generateBar(ping_value, time) {
         line = line.slice(0, sep_index) + styleText(COLORS[sep_count], '|') + line.slice(sep_index + 1);
         sep_count += 1;
     }
-
-    return timestamp + String(ping_value).padStart(3, ' ') + 'ms ' + line;
+    let word = String(ping_value).padStart(3, ' ') + 'ms '
+    if (ping_value === 0) {
+        word = ' '.repeat(process.stdout.columns - max_bar_width)
+        timestamp = ADD_TIMESTAMP ? ' '.repeat(10) : ''
+    }
+    return timestamp + word + line;
 }
 
 function printConsole() {
     if (pings.length) {
-        console.log(generateBar(pings.at(-1), times.at(-1)) + '\n');
+        console.log(generateBar(pings.at(-1), times.at(-1)) + '\n' + generateBar(0, 0));
     }
     process.stdout.write(bottom_title);
 }
@@ -104,7 +108,7 @@ function onResize() {
 
     console.clear();
     pings.slice(0, pings.length - 1).forEach((pingValue, i) => {
-        console.log(generateBar(pingValue, times[i]));
+        console.log(generateBar(pingValue, times[i]) + '\n' + generateBar(0, 0));
     });
 
     const text = `doing a ping on ${PING_URL} every ${EVERY_MS / 1000}s`;
