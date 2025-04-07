@@ -9,20 +9,22 @@ const program = new Command();
 program
     .argument('[url]', 'URL to ping', '8.8.8.8') // Default URL is 8.8.8.8
     .option('--every <seconds>', 'Interval between pings in seconds', 1) // Default interval is 1 second
-    .option('--timestamp', 'Add a timestamp on the right', false)
+    .option('--timestamp', 'Add a timestamp on the left', false)
+    .option('--nogap', 'Remove gap horizontal gap between bars', false)
     .option('--thresholds <numbers>', 'Array of 3 increasing numbers', (value) => {
         const numbers = value.replace('[', '').replace(']', '').split(' ').map(Number);
         if (numbers.length !== 3 || !numbers.every((n, i, arr) => i === 0 || n > arr[i - 1])) {
             throw new Error('--thresholds must be an array of 3 numbers, each larger than the previous.');
         }
         return numbers;
-    }, [128, 256, 500]); // Default thresholds
+    }, [80, 160, 320]); // Default thresholds
 program.parse(process.argv);
 
 const options = program.opts();
 const PING_URL = program.args[0] || '8.8.8.8';
 const EVERY_MS = parseInt(parseFloat(options.every) * 1000);
 const ADD_TIMESTAMP = options.timestamp;
+const NOGAP = options.nogap;
 const THRESHOLDS = options.thresholds;
 
 const COLORS = ['green', 'yellow', 'red'];
@@ -32,6 +34,7 @@ let pings = [];
 let times = [];
 let max_bar_width = 0;
 let bottom_title = '';
+let thresholds_on_width = []
 
 // Utility functions
 function timeStamp() {
@@ -60,23 +63,26 @@ function generateBar(ping_value, time) {
     if (ping_value === -2)
         return timestamp + ' ERR  ' + '/'.repeat(max_bar_width);
 
-    ping_value = Math.round(ping_value)
-    const bg_color = bgColorFromValue(ping_value, THRESHOLDS, COLORS);
+    ping_value = Math.min(999, ping_value)
 
-    const bar_width = Math.min(THRESHOLDS.at(-1), Math.floor(ping_value / THRESHOLDS.at(-1) * max_bar_width));
+    
+
+    const bar_width = Math.min(max_bar_width, Math.floor(ping_value / THRESHOLDS.at(-1) * max_bar_width));
     const space_left = Math.max(max_bar_width - bar_width - 1, 0);
 
     let line = 'x'.repeat(bar_width) + ' '.repeat(space_left);
 
     let sep_count = 0;
-    const thresholds_on_width = THRESHOLDS.map(threshold => Math.floor(threshold / THRESHOLDS.at(-1) * max_bar_width));
+    
     for (const threshold of thresholds_on_width) {
-        if (threshold < bar_width) {
+        if (threshold < bar_width || bar_width == max_bar_width) {
             sep_count += 1;
             continue;
         }
         line = line.slice(0, threshold) + '|' + line.slice(threshold + 1);
     }
+
+    const bg_color = bgColorFromValue(ping_value, THRESHOLDS, COLORS);
 
     let last_x = line.lastIndexOf('x') + 1;
     line = styleText(bg_color, line.slice(0, last_x).replaceAll('x', ' ')) + styleText('reset', line.slice(last_x));
@@ -95,9 +101,13 @@ function generateBar(ping_value, time) {
     return timestamp + word + line;
 }
 
+function printBar(ping, time) {
+    console.log(generateBar(ping, time) + (!NOGAP ? ('\n' + generateBar(0, 0)) : ''));
+}
+
 function printConsole() {
     if (pings.length) {
-        console.log(generateBar(pings.at(-1), times.at(-1)) + '\n' + generateBar(0, 0));
+        printBar(pings.at(-1), times.at(-1))
     }
     process.stdout.write(bottom_title);
 }
@@ -105,13 +115,13 @@ function printConsole() {
 function onResize() {
     const width = process.stdout.columns;
     max_bar_width = width - 6 - (ADD_TIMESTAMP ? 11 : 0);
-
+    thresholds_on_width = THRESHOLDS.map(threshold => Math.floor(threshold / THRESHOLDS.at(-1) * max_bar_width));
     console.clear();
     pings.slice(0, pings.length - 1).forEach((pingValue, i) => {
-        console.log(generateBar(pingValue, times[i]) + '\n' + generateBar(0, 0));
+        printBar(pingValue, times[i])
     });
-
-    const text = `doing a ping on ${PING_URL} every ${EVERY_MS / 1000}s`;
+    
+    const text = `doing a ping on ${PING_URL} every ${EVERY_MS / 1000}s ('q' to quit)`;
     bottom_title = formatBottomText(text, width) + '\r';
     printConsole();
 }
@@ -131,12 +141,15 @@ process.stdout.on("resize", onResize);
 onResize();
 
 async function doPing() {
+    let ping_value = 0;
     try {
         const res = await ping.promise.probe(PING_URL);
-        pings.push(res.alive ? res.time : -1);
-    } catch {
-        pings.push(-2);
+        ping_value = res.alive ? res.time : -1;
+    } catch (e){
+        ping_value = -2;
     }
+    //ping_value = Math.floor(Math.random() * 1000)
+    pings.push(Math.round(ping_value));
     times.push(timeStamp());
     while (pings.length > process.stdout.rows * 2) {
         pings.shift();

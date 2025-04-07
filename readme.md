@@ -26,6 +26,7 @@ node bv-ping [url] [options]
 
 - `--every <seconds>`: Ping interval in seconds (default: 1)
 - `--timestamp`: Show timestamps on each ping
+- `--nogap`: Remove the horizontal gap between bars
 - `--thresholds <a,b,c>`: Set custom latency thresholds (must be 3 increasing numbers)
 
 ## Examples
