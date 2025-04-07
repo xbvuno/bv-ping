@@ -60,6 +60,7 @@ function generateBar(ping_value, time) {
     if (ping_value === -2)
         return timestamp + ' ERR  ' + '/'.repeat(max_bar_width);
 
+    ping_value = Math.round(ping_value)
     const bg_color = bgColorFromValue(ping_value, THRESHOLDS, COLORS);
 
     const bar_width = Math.min(THRESHOLDS.at(-1), Math.floor(ping_value / THRESHOLDS.at(-1) * max_bar_width));
@@ -92,7 +93,7 @@ function generateBar(ping_value, time) {
 
 function printConsole() {
     if (pings.length) {
-        console.log(generateBar(pings.at(-1), times.at(-1)));
+        console.log(generateBar(pings.at(-1), times.at(-1)) + '\n');
     }
     process.stdout.write(bottom_title);
 }
